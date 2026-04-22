@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block title %}WASCO Online Services{% endblock %}
+{% block content %}
+<section class='hero'>
+  <div class='container hero-grid'>
+    <div>
+      <div class='eyebrow'>Digital water service platform</div>
+      <h1>Modern water billing, customer support and service access in one professional system.</h1>
+      <p class='lead'>Check balances, pay bills, report faults and manage service requests from a cleaner and more advanced WASCO experience.</p>
+      <div class='hero-actions'>
+        <a class='btn btn-primary' href='{{ url_for("check_bill") }}'>Check My Bill</a>
+        <a class='btn btn-outline' href='{{ url_for("register") }}'>Open Account</a>
+      </div>
+      <div class='hero-stats'>
+        <div class='hero-stat'><span>Customers on platform</span><strong>{{ stats.total_customers }}</strong></div>
+        <div class='hero-stat'><span>Service branches</span><strong>{{ stats.total_branches }}</strong></div>
+        <div class='hero-stat'><span>Open leak cases</span><strong>{{ stats.unresolved_leaks }}</strong></div>
+        <div class='hero-stat'><span>Unpaid bills</span><strong>{{ stats.unpaid_bills }}</strong></div>
+      </div>
+    </div>
+    <div class='glass-panel'>
+      <h3>System highlights</h3>
+      <div class='feature-list compact'>
+        <div>Customer‑first interface with quick service access</div>
+        <div>Bill enquiry, usage tracking and payment visibility</div>
+        <div>Fast reporting for leak cases and support requests</div>
+        <div>Operational dashboards and connected database workflows</div>
+        <div>Responsive design for desktop and mobile</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class='section spacious'>
+  <div class='container'>
+    <div class='section-intro'>
+      <div class='section-heading'>Core services</div>
+      <h2>A stronger digital experience for public users and registered customers.</h2>
+      <p class='muted'>Everything is arranged to look cleaner, more modern and easier to navigate.</p>
+    </div>
+    <div class='card-grid'>
+      <div class='feature-card'><h3>Bill Enquiry</h3><p class='muted'>Search account balances and view due amounts quickly using your account number.</p></div>
+      <div class='feature-card'><h3>Customer Portal</h3><p class='muted'>View usage, notices, payment records and account activity from a secure dashboard.</p></div>
+      <div class='feature-card'><h3>Leak Reporting</h3><p class='muted'>Send maintenance reports with location and priority details in a clean workflow.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class='section alt spacious'>
+  <div class='container two-col'>
+    <div class='card'>
+      <div class='section-heading'>Service network</div>
+      <h2>Available branches</h2>
+      <div class='branch-list'>
+        {% for branch in branches %}
+        <div class='branch-item'>
+          <strong>{{ branch.branch_name }}</strong>
+          <span>{{ branch.district }}</span>
+        </div>
+        {% else %}
+        <div class='empty-state'>No branches available.</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class='glass-panel dark'>
+      <div class='section-heading'>Platform value</div>
+      <h2>Professional, customer‑ready design.</h2>
+      <p>This system is built for real distribution, with a premium look and a clear digital identity for WASCO.</p>
+      <div class='status-list mt-24'>
+        <div class='status-item'><strong>Visual style</strong><span>Modern glass + card UI</span></div>
+        <div class='status-item'><strong>Navigation</strong><span>Clear and brand‑led</span></div>
+        <div class='status-item'><strong>User flow</strong><span>Focused on customer tasks</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Open Account{% endblock %}
+{% block content %}
+<section class='page-header'><div class='container'><div class='eyebrow'>Customer onboarding</div><h1>Create your online WASCO account.</h1><p class='muted'>Open a secure account to monitor bills, usage and service activity.</p></div></section>
+<section class='section'><div class='container'><div class='card'>
+  <form method='post' class='form-grid two'>
+    <label>First Name<input name='first_name' required></label>
+    <label>Last Name<input name='last_name' required></label>
+    <label>Email<input name='email' type='email' required></label>
+    <label>Phone<input name='phone' required></label>
+    <label>Account Number<input name='account_number' required></label>
+    <label>Meter Number<input name='meter_number' required></label>
+    <label>District<input name='district' required></label>
+    <label>Customer Type<select name='customer_type'><option>Domestic</option><option>Commercial</option><option>Institutional</option></select></label>
+    <label>Branch<select name='branch_id'><option value=''>Select branch</option>{% for branch in branches %}<option value='{{ branch.branch_id }}'>{{ branch.branch_name }} - {{ branch.district }}</option>{% endfor %}</select></label>
+    <label>Password<input name='password' type='password' required></label>
+    <label class='full'>Address<textarea name='address' required></textarea></label>
+    <button class='btn btn-primary' type='submit'>Create Account</button>
+  </form>
+</div></div></section>
+{% endblock %}

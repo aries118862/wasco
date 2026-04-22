@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}Branches{% endblock %}
+{% block content %}
+<section class='page-header'><div class='container'><div class='eyebrow'>Branches</div><h1>Find WASCO support points across districts.</h1><p class='muted'>Contact the nearest branch for help with account and service matters.</p></div></section>
+<section class='section'><div class='container card-grid'>{% for branch in branches %}<div class='feature-card'><h3>{{ branch.branch_name }}</h3><p><strong>District:</strong> {{ branch.district }}</p><p><strong>Manager:</strong> {{ branch.branch_manager_name or 'Assigned internally' }}</p><p><strong>Phone:</strong> {{ branch.phone or 'Pending update' }}</p><p><strong>Email:</strong> {{ branch.email or 'Pending update' }}</p></div>{% else %}<div class='empty-state'>No branches found.</div>{% endfor %}</div></section>
+{% endblock %}

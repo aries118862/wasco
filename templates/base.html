@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <title>{% block title %}WASCO Online Services{% endblock %}</title>
+  <link rel='preconnect' href='https://fonts.googleapis.com'>
+  <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>
+  <link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap' rel='stylesheet'>
+  <link rel='stylesheet' href='{{ url_for("static", filename="css/style.css") }}'>
+  <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+</head>
+<body>
+  <div class='page-shell'>
+    <header class='topbar'>
+      <div class='container nav-wrap'>
+        <a href='{{ url_for("home") }}' class='brand'>
+          <img src='{{ url_for("static", filename="wasco.png") }}' alt='WASCO logo' class='brand-logo'>
+          <div>
+            <div class='brand-title'>WASCO Online Services</div>
+            <div class='brand-subtitle'>Smart water services for modern customer care</div>
+          </div>
+        </a>
+
+        <input id='menu-toggle' type='checkbox' class='menu-toggle'>
+        <label for='menu-toggle' class='menu-button'>☰</label>
+
+        <nav class='nav-links'>
+          <a href='{{ url_for("home") }}'>Home</a>
+          <a href='{{ url_for("services") }}'>Services</a>
+          <a href='{{ url_for("check_bill") }}'>Check Bill</a>
+          <a href='{{ url_for("report_leak") }}'>Report Leak</a>
+          <a href='{{ url_for("contact") }}'>Branches</a>
+          {% if current_user %}
+            <a href='{% if current_user.role == "customer" %}{{ url_for("customer_dashboard") }}{% elif current_user.role == "manager" %}{{ url_for("manager_dashboard") }}{% else %}{{ url_for("admin_dashboard") }}{% endif %}'>Dashboard</a>
+            <a href='{{ url_for("logout") }}' class='btn btn-outline'>Sign Out</a>
+          {% else %}
+            <a href='{{ url_for("register") }}'>Open Account</a>
+            <a href='{{ url_for("login") }}' class='btn btn-primary'>Sign In</a>
+          {% endif %}
+        </nav>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <section class='container mt-20'>
+          {% for category, message in messages %}
+            <div class='flash {{ category }}'>{{ message }}</div>
+          {% endfor %}
+        </section>
+      {% endif %}
+    {% endwith %}
+
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class='footer'>
+      <div class='container footer-grid'>
+        <div>
+          <div class='footer-brand'>
+            <img src='{{ url_for("static", filename="wasco.png") }}' alt='WASCO logo' class='footer-logo'>
+            <div>
+              <h4>WASCO Online Services</h4>
+              <p>Reliable digital water services, billing access, customer support and operational visibility in one polished platform.</p>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h4>Customer tools</h4>
+          <ul class='footer-list'>
+            <li>Bill enquiry and balance tracking</li>
+            <li>Leak and service reporting</li>
+            <li>Usage and payment history</li>
+            <li>Secure online account access</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Service status</h4>
+          <p>{{ payment_provider_name }} is configured for integration-ready development and payment workflow testing.</p>
+        </div>
+      </div>
+      <div class='copyright'>© {{ year }} Water and Sewerage Company (WASCO)</div>
+    </footer>
+  </div>
+</body>
+</html>

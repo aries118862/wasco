@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Admin Customers{% endblock %}
+{% block content %}
+<section class='dashboard-header'><div class='container'><div class='eyebrow'>Customer records</div><h1>Customer records management</h1><p>Add and maintain customer accounts, meters, districts, branch assignments and profile details in a cleaner workflow.</p></div></section>
+{% include 'admin_nav.html' %}
+<section class='section'><div class='container'>
+  <div class='card'>
+    <h3>Add customer</h3>
+    <form method='post' class='form-grid two'>
+      <label>First Name<input name='first_name' required></label>
+      <label>Last Name<input name='last_name' required></label>
+      <label>Email<input name='email' type='email' required></label>
+      <label>Phone<input name='phone' required></label>
+      <label>Account Number<input name='account_number' required></label>
+      <label>Meter Number<input name='meter_number' required></label>
+      <label>District<input name='district' required></label>
+      <label>Customer Type<select name='customer_type'>{% for item in customer_types %}<option value='{{ item }}'>{{ item }}</option>{% endfor %}</select></label>
+      <label>Branch<select name='branch_id'><option value=''>Select branch</option>{% for branch in branches %}<option value='{{ branch.branch_id }}'>{{ branch.branch_name }} - {{ branch.district }}</option>{% endfor %}</select></label>
+      <label>Link portal user<select name='user_id'><option value=''>No linked user</option>{% for user in linkable_users %}<option value='{{ user.user_id }}'>{{ user.full_name }} - {{ user.email }}</option>{% endfor %}</select></label>
+      <label class='full'>Address<textarea name='address' required></textarea></label>
+      <button class='btn btn-primary'>Save Customer</button>
+    </form>
+  </div>
+</div></section>
+<section class='section alt'><div class='container table-card'><h3>Customer master data</h3><table><thead><tr><th>Account</th><th>Name</th><th>Meter</th><th>District</th><th>Branch</th><th>Linked User</th><th>Edit</th></tr></thead><tbody>{% for customer in customers %}<tr><td>{{ customer.account_number }}</td><td>{{ customer.first_name }} {{ customer.last_name }}</td><td>{{ customer.meter_number }}</td><td>{{ customer.district }}</td><td>{{ customer.branch_name or '-' }}</td><td>{{ customer.linked_user_name or '-' }}</td><td><details><summary class='btn btn-outline btn-small'>Edit</summary><form method='post' action='{{ url_for("admin_edit_customer", customer_id=customer.customer_id) }}' class='form-grid two mt-20'><label>First Name<input name='first_name' value='{{ customer.first_name }}' required></label><label>Last Name<input name='last_name' value='{{ customer.last_name }}' required></label><label>Email<input name='email' value='{{ customer.email }}' type='email' required></label><label>Phone<input name='phone' value='{{ customer.phone }}' required></label><label>Account Number<input name='account_number' value='{{ customer.account_number }}' required></label><label>Meter Number<input name='meter_number' value='{{ customer.meter_number }}' required></label><label>District<input name='district' value='{{ customer.district }}' required></label><label>Customer Type<select name='customer_type'>{% for item in customer_types %}<option value='{{ item }}' {% if customer.customer_type == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></label><label class='full'>Branch<select name='branch_id'><option value=''>Select branch</option>{% for branch in branches %}<option value='{{ branch.branch_id }}' {% if customer.branch_id == branch.branch_id %}selected{% endif %}>{{ branch.branch_name }} - {{ branch.district }}</option>{% endfor %}</select></label><label class='full'>Address<textarea name='address' required>{{ customer.address }}</textarea></label><button class='btn btn-primary'>Update Customer</button></form></details></td></tr>{% else %}<tr><td colspan='7'>No customers available.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

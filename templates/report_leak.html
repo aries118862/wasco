@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}Report Leak{% endblock %}
+{% block content %}
+<section class='page-header'><div class='container'><div class='eyebrow'>Service support</div><h1>Report a water leakage issue online.</h1><p class='muted'>Submit the location and description clearly so response teams can act faster.</p></div></section>
+<section class='section'><div class='container'><div class='card'><form method='post' class='form-grid two'><label>Account Number (optional)<input name='account_number' placeholder='WAS-1001'></label><label>Priority<select name='priority'><option>Low</option><option selected>Medium</option><option>High</option></select></label><label class='full'>Leak Location<input name='location' required placeholder='Street, village, landmark or main line reference'></label><label class='full'>Description<textarea name='description' required placeholder='Describe the issue clearly'></textarea></label><button class='btn btn-primary' type='submit'>Submit Leak Report</button></form></div></div></section>
+{% endblock %}

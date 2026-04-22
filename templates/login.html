@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Sign In{% endblock %}
+{% block content %}
+<section class='auth-section'>
+  <div class='container auth-grid'>
+    <div class='auth-panel'>
+      <div class='eyebrow'>Secure access</div>
+      <h1>Welcome back to your WASCO online account.</h1>
+      <p class='lead' style='color:#698399'>Sign in to continue with billing, account activity, usage monitoring and service support from one secure place.</p>
+      <div class='auth-side-note'>
+        <h3>Included in your account experience</h3>
+        <div class='feature-list compact'>
+          <div>Cleaner dashboard experience</div>
+          <div>Billing and service records in one place</div>
+          <div>Secure redirect to the right workspace</div>
+        </div>
+      </div>
+    </div>
+    <div class='card'>
+      <h3>Sign In</h3>
+      <p class='muted'>Use your registered email and password.</p>
+      <form method='post' class='form-grid'>
+        <label>Email<input name='email' type='email' required placeholder='name@example.com'></label>
+        <label>Password<input name='password' type='password' required placeholder='Enter your password'></label>
+        <button class='btn btn-primary' type='submit'>Access Account</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

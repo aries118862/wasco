@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}User Accounts{% endblock %}
+{% block content %}
+<section class='dashboard-header'><div class='container'><div class='eyebrow'>System workspace</div><h1>User account management</h1><p>Create administrators, branch managers and customer portal users from a dedicated module.</p></div></section>
+{% include 'admin_nav.html' %}
+<section class='section'><div class='container two-col'>
+  <div class='card'>
+    <h3>Add user account</h3>
+    <form method='post' class='form-grid two'>
+      <label>Full Name<input name='full_name' required></label>
+      <label>Email<input name='email' type='email' required></label>
+      <label>Password<input name='password' type='password' required></label>
+      <label>Role<select name='role'>{% for role in user_roles %}<option value='{{ role }}'>{{ role|title }}</option>{% endfor %}</select></label>
+      <label class='full'>Branch<select name='branch_id'><option value=''>No branch</option>{% for branch in branches %}<option value='{{ branch.branch_id }}'>{{ branch.branch_name }} - {{ branch.district }}</option>{% endfor %}</select></label>
+      <button class='btn btn-primary'>Create User</button>
+    </form>
+  </div>
+  <div class='card'>
+    <h3>Role guidance</h3>
+    <div class='mini-list'>
+      <div class='mini-row'><strong>Admin</strong><span>Full operational control</span></div>
+      <div class='mini-row'><strong>Manager</strong><span>Summaries and insights</span></div>
+      <div class='mini-row'><strong>Customer</strong><span>Portal access and bill tracking</span></div>
+    </div>
+  </div>
+</div></section>
+<section class='section alt'><div class='container table-card'><h3>All user accounts</h3><table><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Branch</th><th>Status</th><th>Action</th></tr></thead><tbody>{% for user in users %}<tr><td>{{ user.user_id }}</td><td>{{ user.full_name }}</td><td>{{ user.email }}</td><td><span class='badge'>{{ user.role }}</span></td><td>{{ user.branch_name or '-' }}</td><td>{{ 'Active' if user.is_active else 'Disabled' }}</td><td><form method='post' action='{{ url_for("admin_toggle_user", user_id=user.user_id) }}'><button class='btn btn-outline btn-small'>{{ 'Disable' if user.is_active else 'Enable' }}</button></form></td></tr>{% else %}<tr><td colspan='7'>No user accounts available.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}
