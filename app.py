@@ -20,14 +20,14 @@ app.secret_key = os.getenv("SECRET_KEY", "wasco-dev-secret-key")
 
 # PostgreSQL - Supabase primary database
 PG_HOST = os.getenv("PG_HOST", "aws-0-eu-west-1.pooler.supabase.com")
-PG_PORT = int(os.getenv("PG_PORT", "5432"))
+PG_PORT = int(os.getenv("PG_PORT") or 5432)
 PG_USER = os.getenv("PG_USER", "postgres")
 PG_PASSWORD = os.getenv("PG_PASSWORD", "")
 PG_DATABASE = os.getenv("PG_DATABASE", "postgres")
 
 # MySQL - Railway secondary database
 MYSQL_HOST = os.getenv("MYSQL_HOST", "mysql.railway.internal")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+MYSQL_PORT = int(os.getenv("MYSQL_PORT") or 3306)
 MYSQL_USER = os.getenv("MYSQL_USER", "root")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
 MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "railway")
@@ -148,9 +148,13 @@ def execute_mysql(sql, params=None, fetch=False):
 def mysql_available():
     try:
         conn = get_mysql_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 AS ok")
+            cur.fetchone()
         conn.close()
         return True
-    except Exception:
+    except Exception as e:
+        print("MYSQL CONNECTION ERROR:", e)
         return False
 
 
@@ -223,8 +227,8 @@ def log_action(user_id, action_name, details):
             """,
             (user_id, action_name, details),
         )
-    except Exception:
-        pass
+    except Exception as e:
+        print("AUDIT LOG ERROR:", e)
 
 
 # --------------------------
@@ -353,59 +357,82 @@ def send_user_message(channel_url, user_id, message):
 def sync_rate_to_secondary(rate_id):
     try:
         if not mysql_available():
+            print("MYSQL NOT AVAILABLE: sync_rate_to_secondary")
             return
+
         rate = fetch_one_pg(
             """
-            SELECT rate_tier, min_units, max_units, price_per_unit, fixed_charge, effective_from, active_status
+            SELECT rate_id, rate_tier, min_units, max_units, price_per_unit,
+                   fixed_charge, effective_from, active_status
             FROM billing_rates
             WHERE rate_id = %s
             """,
             (rate_id,),
         )
         if not rate:
+            print("RATE NOT FOUND IN POSTGRES:", rate_id)
             return
+
         existing = fetch_one_mysql("SELECT rate_id FROM billing_rates WHERE rate_tier = %s", (rate["rate_tier"],))
         if existing:
             execute_mysql(
                 """
                 UPDATE billing_rates
-                SET min_units=%s, max_units=%s, price_per_unit=%s, fixed_charge=%s, effective_from=%s, active_status=%s
+                SET min_units=%s, max_units=%s, price_per_unit=%s,
+                    fixed_charge=%s, effective_from=%s, active_status=%s
                 WHERE rate_tier=%s
                 """,
                 (
-                    rate["min_units"], rate["max_units"], rate["price_per_unit"], rate["fixed_charge"],
-                    rate["effective_from"], rate["active_status"], rate["rate_tier"],
+                    rate["min_units"],
+                    rate["max_units"],
+                    rate["price_per_unit"],
+                    rate["fixed_charge"],
+                    rate["effective_from"],
+                    rate["active_status"],
+                    rate["rate_tier"],
                 ),
             )
         else:
             execute_mysql(
                 """
-                INSERT INTO billing_rates (rate_tier, min_units, max_units, price_per_unit, fixed_charge, effective_from, active_status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO billing_rates
+                (rate_id, rate_tier, min_units, max_units, price_per_unit, fixed_charge, effective_from, active_status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
-                    rate["rate_tier"], rate["min_units"], rate["max_units"], rate["price_per_unit"],
-                    rate["fixed_charge"], rate["effective_from"], rate["active_status"],
+                    rate["rate_id"],
+                    rate["rate_tier"],
+                    rate["min_units"],
+                    rate["max_units"],
+                    rate["price_per_unit"],
+                    rate["fixed_charge"],
+                    rate["effective_from"],
+                    rate["active_status"],
                 ),
             )
-    except Exception:
-        pass
+        print("MYSQL SYNC OK: billing_rates", rate_id)
+    except Exception as e:
+        print("MYSQL SYNC ERROR in sync_rate_to_secondary:", e)
 
 
 def sync_user_to_secondary(user_id):
     try:
         if not mysql_available():
+            print("MYSQL NOT AVAILABLE: sync_user_to_secondary")
             return
+
         user = fetch_one_pg(
             """
-            SELECT full_name, email, password_hash, role, branch_id, is_active
+            SELECT user_id, full_name, email, password_hash, role, branch_id, is_active
             FROM users
             WHERE user_id = %s
             """,
             (user_id,),
         )
         if not user:
+            print("USER NOT FOUND IN POSTGRES:", user_id)
             return
+
         existing = fetch_one_mysql("SELECT user_id FROM users WHERE email = %s", (user["email"],))
         if existing:
             execute_mysql(
@@ -414,29 +441,48 @@ def sync_user_to_secondary(user_id):
                 SET full_name=%s, password_hash=%s, role=%s, branch_id=%s, is_active=%s
                 WHERE email=%s
                 """,
-                (user["full_name"], user["password_hash"], user["role"], user["branch_id"], user["is_active"], user["email"]),
+                (
+                    user["full_name"],
+                    user["password_hash"],
+                    user["role"],
+                    user["branch_id"],
+                    user["is_active"],
+                    user["email"],
+                ),
             )
         else:
             execute_mysql(
                 """
-                INSERT INTO users (full_name, email, password_hash, role, branch_id, is_active)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO users
+                (user_id, full_name, email, password_hash, role, branch_id, is_active)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                (user["full_name"], user["email"], user["password_hash"], user["role"], user["branch_id"], user["is_active"]),
+                (
+                    user["user_id"],
+                    user["full_name"],
+                    user["email"],
+                    user["password_hash"],
+                    user["role"],
+                    user["branch_id"],
+                    user["is_active"],
+                ),
             )
-    except Exception:
-        pass
+        print("MYSQL SYNC OK: users", user_id)
+    except Exception as e:
+        print("MYSQL SYNC ERROR in sync_user_to_secondary:", e)
 
 
 def sync_customer_to_secondary(customer_id):
     try:
         if not mysql_available():
+            print("MYSQL NOT AVAILABLE: sync_customer_to_secondary")
             return
+
         customer = fetch_one_pg(
             """
-            SELECT c.customer_id, c.user_id, c.branch_id, c.account_number, c.meter_number, c.first_name,
-                   c.last_name, c.email, c.phone, c.district, c.address, c.customer_type,
-                   u.email AS user_email
+            SELECT c.customer_id, c.user_id, c.branch_id, c.account_number, c.meter_number,
+                   c.first_name, c.last_name, c.email, c.phone, c.district, c.address,
+                   c.customer_type, u.email AS user_email
             FROM customers c
             LEFT JOIN users u ON u.user_id = c.user_id
             WHERE c.customer_id = %s
@@ -444,27 +490,16 @@ def sync_customer_to_secondary(customer_id):
             (customer_id,),
         )
         if not customer:
+            print("CUSTOMER NOT FOUND IN POSTGRES:", customer_id)
             return
+
         secondary_user_id = None
-        if customer["user_email"]:
+        if customer["user_id"]:
             sync_user_to_secondary(customer["user_id"])
             row = fetch_one_mysql("SELECT user_id FROM users WHERE email = %s", (customer["user_email"],))
             secondary_user_id = row["user_id"] if row else None
 
         existing = fetch_one_mysql("SELECT customer_id FROM customers WHERE account_number = %s", (customer["account_number"],))
-        params = (
-            secondary_user_id,
-            customer["branch_id"],
-            customer["account_number"],
-            customer["meter_number"],
-            customer["first_name"],
-            customer["last_name"],
-            customer["email"],
-            customer["phone"],
-            customer["district"],
-            customer["address"],
-            customer["customer_type"],
-        )
         if existing:
             execute_mysql(
                 """
@@ -490,22 +525,40 @@ def sync_customer_to_secondary(customer_id):
         else:
             execute_mysql(
                 """
-                INSERT INTO customers (user_id, branch_id, account_number, meter_number, first_name, last_name, email, phone, district, address, customer_type)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO customers
+                (customer_id, user_id, branch_id, account_number, meter_number, first_name, last_name, email, phone, district, address, customer_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                params,
+                (
+                    customer["customer_id"],
+                    secondary_user_id,
+                    customer["branch_id"],
+                    customer["account_number"],
+                    customer["meter_number"],
+                    customer["first_name"],
+                    customer["last_name"],
+                    customer["email"],
+                    customer["phone"],
+                    customer["district"],
+                    customer["address"],
+                    customer["customer_type"],
+                ),
             )
-    except Exception:
-        pass
+        print("MYSQL SYNC OK: customers", customer_id)
+    except Exception as e:
+        print("MYSQL SYNC ERROR in sync_customer_to_secondary:", e)
 
 
 def sync_usage_to_secondary(usage_id):
     try:
         if not mysql_available():
+            print("MYSQL NOT AVAILABLE: sync_usage_to_secondary")
             return
+
         usage = fetch_one_pg(
             """
-            SELECT w.usage_month, w.previous_reading, w.current_reading, w.units_used, c.account_number
+            SELECT w.usage_id, w.usage_month, w.previous_reading, w.current_reading, w.units_used,
+                   c.account_number
             FROM water_usage w
             JOIN customers c ON c.customer_id = w.customer_id
             WHERE w.usage_id = %s
@@ -513,41 +566,65 @@ def sync_usage_to_secondary(usage_id):
             (usage_id,),
         )
         if not usage:
+            print("USAGE NOT FOUND IN POSTGRES:", usage_id)
             return
-        secondary_customer = fetch_one_mysql("SELECT customer_id FROM customers WHERE account_number = %s", (usage["account_number"],))
-        if not secondary_customer:
-            return
-        existing = fetch_one_mysql(
-            """
-            SELECT w.usage_id
-            FROM water_usage w
-            WHERE w.customer_id = %s AND w.usage_month = %s
-            """,
-            (secondary_customer["customer_id"], usage["usage_month"]),
+
+        secondary_customer = fetch_one_mysql(
+            "SELECT customer_id FROM customers WHERE account_number = %s",
+            (usage["account_number"],)
         )
-        if not existing:
+        if not secondary_customer:
+            print("MYSQL CUSTOMER NOT FOUND FOR USAGE:", usage["account_number"])
+            return
+
+        existing = fetch_one_mysql("SELECT usage_id FROM water_usage WHERE usage_id = %s", (usage["usage_id"],))
+        if existing:
             execute_mysql(
                 """
-                INSERT INTO water_usage (customer_id, usage_month, previous_reading, current_reading, units_used)
-                VALUES (%s, %s, %s, %s, %s)
+                UPDATE water_usage
+                SET customer_id=%s, usage_month=%s, previous_reading=%s, current_reading=%s, units_used=%s
+                WHERE usage_id=%s
                 """,
                 (
-                    secondary_customer["customer_id"], usage["usage_month"], usage["previous_reading"],
-                    usage["current_reading"], usage["units_used"],
+                    secondary_customer["customer_id"],
+                    usage["usage_month"],
+                    usage["previous_reading"],
+                    usage["current_reading"],
+                    usage["units_used"],
+                    usage["usage_id"],
                 ),
             )
-    except Exception:
-        pass
+        else:
+            execute_mysql(
+                """
+                INSERT INTO water_usage
+                (usage_id, customer_id, usage_month, previous_reading, current_reading, units_used)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    usage["usage_id"],
+                    secondary_customer["customer_id"],
+                    usage["usage_month"],
+                    usage["previous_reading"],
+                    usage["current_reading"],
+                    usage["units_used"],
+                ),
+            )
+        print("MYSQL SYNC OK: water_usage", usage_id)
+    except Exception as e:
+        print("MYSQL SYNC ERROR in sync_usage_to_secondary:", e)
 
 
 def sync_bill_to_secondary(bill_id):
     try:
         if not mysql_available():
+            print("MYSQL NOT AVAILABLE: sync_bill_to_secondary")
             return
+
         bill = fetch_one_pg(
             """
-            SELECT b.bill_month, b.units_used, b.amount_due, b.outstanding_amount, b.status, b.due_date,
-                   c.account_number, w.usage_month, r.rate_tier
+            SELECT b.bill_id, b.bill_month, b.units_used, b.amount_due, b.outstanding_amount,
+                   b.status, b.due_date, c.account_number, w.usage_id, r.rate_id
             FROM bills b
             JOIN customers c ON c.customer_id = b.customer_id
             LEFT JOIN water_usage w ON w.usage_id = b.usage_id
@@ -557,61 +634,75 @@ def sync_bill_to_secondary(bill_id):
             (bill_id,),
         )
         if not bill:
+            print("BILL NOT FOUND IN POSTGRES:", bill_id)
             return
-        secondary_customer = fetch_one_mysql("SELECT customer_id FROM customers WHERE account_number = %s", (bill["account_number"],))
-        if not secondary_customer:
-            return
-        secondary_usage_id = None
-        if bill["usage_month"] is not None:
-            usage_row = fetch_one_mysql(
-                "SELECT usage_id FROM water_usage WHERE customer_id = %s AND usage_month = %s",
-                (secondary_customer["customer_id"], bill["usage_month"]),
-            )
-            secondary_usage_id = usage_row["usage_id"] if usage_row else None
-        secondary_rate_id = None
-        if bill["rate_tier"]:
-            rate_row = fetch_one_mysql("SELECT rate_id FROM billing_rates WHERE rate_tier = %s", (bill["rate_tier"],))
-            secondary_rate_id = rate_row["rate_id"] if rate_row else None
 
-        existing = fetch_one_mysql(
-            "SELECT bill_id FROM bills WHERE customer_id = %s AND bill_month = %s",
-            (secondary_customer["customer_id"], bill["bill_month"]),
+        secondary_customer = fetch_one_mysql(
+            "SELECT customer_id FROM customers WHERE account_number = %s",
+            (bill["account_number"],)
         )
+        if not secondary_customer:
+            print("MYSQL CUSTOMER NOT FOUND FOR BILL:", bill["account_number"])
+            return
+
+        existing = fetch_one_mysql("SELECT bill_id FROM bills WHERE bill_id = %s", (bill["bill_id"],))
         if existing:
             execute_mysql(
                 """
                 UPDATE bills
-                SET usage_id=%s, rate_id=%s, units_used=%s, amount_due=%s, outstanding_amount=%s, status=%s, due_date=%s
+                SET customer_id=%s, usage_id=%s, rate_id=%s, bill_month=%s, units_used=%s,
+                    amount_due=%s, outstanding_amount=%s, status=%s, due_date=%s
                 WHERE bill_id=%s
                 """,
                 (
-                    secondary_usage_id, secondary_rate_id, bill["units_used"], bill["amount_due"],
-                    bill["outstanding_amount"], bill["status"], bill["due_date"], existing["bill_id"],
+                    secondary_customer["customer_id"],
+                    bill["usage_id"],
+                    bill["rate_id"],
+                    bill["bill_month"],
+                    bill["units_used"],
+                    bill["amount_due"],
+                    bill["outstanding_amount"],
+                    bill["status"],
+                    bill["due_date"],
+                    bill["bill_id"],
                 ),
             )
         else:
             execute_mysql(
                 """
-                INSERT INTO bills (customer_id, usage_id, rate_id, bill_month, units_used, amount_due, outstanding_amount, status, due_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO bills
+                (bill_id, customer_id, usage_id, rate_id, bill_month, units_used, amount_due, outstanding_amount, status, due_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
-                    secondary_customer["customer_id"], secondary_usage_id, secondary_rate_id, bill["bill_month"],
-                    bill["units_used"], bill["amount_due"], bill["outstanding_amount"], bill["status"], bill["due_date"],
+                    bill["bill_id"],
+                    secondary_customer["customer_id"],
+                    bill["usage_id"],
+                    bill["rate_id"],
+                    bill["bill_month"],
+                    bill["units_used"],
+                    bill["amount_due"],
+                    bill["outstanding_amount"],
+                    bill["status"],
+                    bill["due_date"],
                 ),
             )
-    except Exception:
-        pass
+        print("MYSQL SYNC OK: bills", bill_id)
+    except Exception as e:
+        print("MYSQL SYNC ERROR in sync_bill_to_secondary:", e)
 
 
 def sync_payment_to_secondary(payment_id):
     try:
         if not mysql_available():
+            print("MYSQL NOT AVAILABLE: sync_payment_to_secondary")
             return
+
         payment = fetch_one_pg(
             """
-            SELECT p.amount_paid, p.payment_method, p.payment_reference, p.payment_gateway, p.payment_status, p.payment_date,
-                   c.account_number, b.bill_month
+            SELECT p.payment_id, p.amount_paid, p.payment_method, p.payment_reference,
+                   p.payment_gateway, p.payment_status, p.payment_date,
+                   c.account_number, b.bill_id
             FROM payments p
             JOIN customers c ON c.customer_id = p.customer_id
             JOIN bills b ON b.bill_id = p.bill_id
@@ -620,32 +711,60 @@ def sync_payment_to_secondary(payment_id):
             (payment_id,),
         )
         if not payment:
+            print("PAYMENT NOT FOUND IN POSTGRES:", payment_id)
             return
-        secondary_customer = fetch_one_mysql("SELECT customer_id FROM customers WHERE account_number = %s", (payment["account_number"],))
-        if not secondary_customer:
-            return
-        secondary_bill = fetch_one_mysql(
-            "SELECT bill_id FROM bills WHERE customer_id = %s AND bill_month = %s",
-            (secondary_customer["customer_id"], payment["bill_month"]),
+
+        secondary_customer = fetch_one_mysql(
+            "SELECT customer_id FROM customers WHERE account_number = %s",
+            (payment["account_number"],)
         )
-        if not secondary_bill:
+        if not secondary_customer:
+            print("MYSQL CUSTOMER NOT FOUND FOR PAYMENT:", payment["account_number"])
             return
-        existing = None
-        if payment["payment_reference"]:
-            existing = fetch_one_mysql("SELECT payment_id FROM payments WHERE payment_reference = %s", (payment["payment_reference"],))
-        if not existing:
+
+        existing = fetch_one_mysql("SELECT payment_id FROM payments WHERE payment_id = %s", (payment["payment_id"],))
+        if existing:
             execute_mysql(
                 """
-                INSERT INTO payments (bill_id, customer_id, amount_paid, payment_method, payment_reference, payment_gateway, payment_status, payment_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                UPDATE payments
+                SET bill_id=%s, customer_id=%s, amount_paid=%s, payment_method=%s,
+                    payment_reference=%s, payment_gateway=%s, payment_status=%s, payment_date=%s
+                WHERE payment_id=%s
                 """,
                 (
-                    secondary_bill["bill_id"], secondary_customer["customer_id"], payment["amount_paid"], payment["payment_method"],
-                    payment["payment_reference"], payment["payment_gateway"], payment["payment_status"], payment["payment_date"],
+                    payment["bill_id"],
+                    secondary_customer["customer_id"],
+                    payment["amount_paid"],
+                    payment["payment_method"],
+                    payment["payment_reference"],
+                    payment["payment_gateway"],
+                    payment["payment_status"],
+                    payment["payment_date"],
+                    payment["payment_id"],
                 ),
             )
-    except Exception:
-        pass
+        else:
+            execute_mysql(
+                """
+                INSERT INTO payments
+                (payment_id, bill_id, customer_id, amount_paid, payment_method, payment_reference, payment_gateway, payment_status, payment_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    payment["payment_id"],
+                    payment["bill_id"],
+                    secondary_customer["customer_id"],
+                    payment["amount_paid"],
+                    payment["payment_method"],
+                    payment["payment_reference"],
+                    payment["payment_gateway"],
+                    payment["payment_status"],
+                    payment["payment_date"],
+                ),
+            )
+        print("MYSQL SYNC OK: payments", payment_id)
+    except Exception as e:
+        print("MYSQL SYNC ERROR in sync_payment_to_secondary:", e)
 
 
 # --------------------------
@@ -1591,6 +1710,80 @@ def admin_update_request(request_id):
     )
     flash("Service request updated.", "success")
     return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/test-mysql")
+def test_mysql():
+    try:
+        conn = get_mysql_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT DATABASE() AS database_name, NOW() AS server_time")
+            row = cur.fetchone()
+        conn.close()
+        return jsonify({"ok": True, "result": row})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/test-mysql-insert")
+def test_mysql_insert():
+    try:
+        execute_mysql(
+            """
+            INSERT INTO users (full_name, email, password_hash, role, branch_id, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                "Debug User",
+                f"debug_{int(datetime.now().timestamp())}@test.com",
+                "debug_hash",
+                "customer",
+                None,
+                True,
+            ),
+        )
+        return jsonify({"ok": True, "message": "Insert worked"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/backfill-mysql", methods=["POST"])
+@login_required("admin")
+def admin_backfill_mysql():
+    try:
+        if not mysql_available():
+            flash("MySQL is not available.", "danger")
+            return redirect(url_for("admin_dashboard"))
+
+        users = fetch_all_pg("SELECT user_id FROM users ORDER BY user_id")
+        for row in users:
+            sync_user_to_secondary(row["user_id"])
+
+        customers = fetch_all_pg("SELECT customer_id FROM customers ORDER BY customer_id")
+        for row in customers:
+            sync_customer_to_secondary(row["customer_id"])
+
+        rates = fetch_all_pg("SELECT rate_id FROM billing_rates ORDER BY rate_id")
+        for row in rates:
+            sync_rate_to_secondary(row["rate_id"])
+
+        usage_rows = fetch_all_pg("SELECT usage_id FROM water_usage ORDER BY usage_id")
+        for row in usage_rows:
+            sync_usage_to_secondary(row["usage_id"])
+
+        bills = fetch_all_pg("SELECT bill_id FROM bills ORDER BY bill_id")
+        for row in bills:
+            sync_bill_to_secondary(row["bill_id"])
+
+        payments = fetch_all_pg("SELECT payment_id FROM payments ORDER BY payment_id")
+        for row in payments:
+            sync_payment_to_secondary(row["payment_id"])
+
+        flash("MySQL backfill completed successfully.", "success")
+        return redirect(url_for("admin_dashboard"))
+    except Exception as e:
+        flash(f"MySQL backfill failed: {e}", "danger")
+        return redirect(url_for("admin_dashboard"))
 
 
 # --------------------------
