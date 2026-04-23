@@ -147,6 +147,7 @@ def execute_mysql(sql, params=None, fetch=False):
 
 def mysql_available():
     try:
+        print("MYSQL CONFIG:", MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_DATABASE)
         conn = get_mysql_connection()
         with conn.cursor() as cur:
             cur.execute("SELECT 1 AS ok")
@@ -1744,44 +1745,75 @@ def test_mysql_insert():
         )
         return jsonify({"ok": True, "message": "Insert worked"})
     except Exception as e:
+        print("TEST MYSQL INSERT ERROR:", e)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.route("/admin/backfill-mysql", methods=["POST"])
+@app.route("/admin/backfill-mysql", methods=["GET", "POST"])
 @login_required("admin")
 def admin_backfill_mysql():
     try:
+        print("BACKFILL STARTED")
+
         if not mysql_available():
+            print("BACKFILL FAILED: MySQL not available")
             flash("MySQL is not available.", "danger")
             return redirect(url_for("admin_dashboard"))
 
         users = fetch_all_pg("SELECT user_id FROM users ORDER BY user_id")
+        print("USERS TO SYNC:", len(users))
         for row in users:
-            sync_user_to_secondary(row["user_id"])
+            try:
+                sync_user_to_secondary(row["user_id"])
+            except Exception as e:
+                print("BACKFILL USER ERROR:", row["user_id"], e)
 
         customers = fetch_all_pg("SELECT customer_id FROM customers ORDER BY customer_id")
+        print("CUSTOMERS TO SYNC:", len(customers))
         for row in customers:
-            sync_customer_to_secondary(row["customer_id"])
+            try:
+                sync_customer_to_secondary(row["customer_id"])
+            except Exception as e:
+                print("BACKFILL CUSTOMER ERROR:", row["customer_id"], e)
 
         rates = fetch_all_pg("SELECT rate_id FROM billing_rates ORDER BY rate_id")
+        print("RATES TO SYNC:", len(rates))
         for row in rates:
-            sync_rate_to_secondary(row["rate_id"])
+            try:
+                sync_rate_to_secondary(row["rate_id"])
+            except Exception as e:
+                print("BACKFILL RATE ERROR:", row["rate_id"], e)
 
         usage_rows = fetch_all_pg("SELECT usage_id FROM water_usage ORDER BY usage_id")
+        print("USAGE ROWS TO SYNC:", len(usage_rows))
         for row in usage_rows:
-            sync_usage_to_secondary(row["usage_id"])
+            try:
+                sync_usage_to_secondary(row["usage_id"])
+            except Exception as e:
+                print("BACKFILL USAGE ERROR:", row["usage_id"], e)
 
         bills = fetch_all_pg("SELECT bill_id FROM bills ORDER BY bill_id")
+        print("BILLS TO SYNC:", len(bills))
         for row in bills:
-            sync_bill_to_secondary(row["bill_id"])
+            try:
+                sync_bill_to_secondary(row["bill_id"])
+            except Exception as e:
+                print("BACKFILL BILL ERROR:", row["bill_id"], e)
 
         payments = fetch_all_pg("SELECT payment_id FROM payments ORDER BY payment_id")
+        print("PAYMENTS TO SYNC:", len(payments))
         for row in payments:
-            sync_payment_to_secondary(row["payment_id"])
+            try:
+                sync_payment_to_secondary(row["payment_id"])
+            except Exception as e:
+                print("BACKFILL PAYMENT ERROR:", row["payment_id"], e)
 
+        print("BACKFILL COMPLETED")
         flash("MySQL backfill completed successfully.", "success")
         return redirect(url_for("admin_dashboard"))
+
     except Exception as e:
+        print("BACKFILL FATAL ERROR:", e)
         flash(f"MySQL backfill failed: {e}", "danger")
         return redirect(url_for("admin_dashboard"))
 
