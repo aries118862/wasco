@@ -1873,3 +1873,600 @@ def internal_error(_error):
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+@app.route("/admin/backfill-mysql", methods=["GET", "POST"])
+@login_required("admin")
+def admin_backfill_mysql():
+    try:
+        print("BACKFILL STARTED")
+
+        if not mysql_available():
+            print("BACKFILL FAILED: MySQL not available")
+            flash("MySQL is not available.", "danger")
+            return redirect(url_for("admin_dashboard"))
+
+        branches = fetch_all_pg("SELECT branch_id FROM branches ORDER BY branch_id")
+        print("BRANCHES TO SYNC:", len(branches))
+        for row in branches:
+            try:
+                sync_branch_to_secondary(row["branch_id"])
+            except Exception as e:
+                print("BACKFILL BRANCH ERROR:", row["branch_id"], e)
+
+        users = fetch_all_pg("SELECT user_id FROM users ORDER BY user_id")
+        print("USERS TO SYNC:", len(users))
+        for row in users:
+            try:
+                sync_user_to_secondary(row["user_id"])
+            except Exception as e:
+                print("BACKFILL USER ERROR:", row["user_id"], e)
+
+        customers = fetch_all_pg("SELECT customer_id FROM customers ORDER BY customer_id")
+        print("CUSTOMERS TO SYNC:", len(customers))
+        for row in customers:
+            try:
+                sync_customer_to_secondary(row["customer_id"])
+            except Exception as e:
+                print("BACKFILL CUSTOMER ERROR:", row["customer_id"], e)
+
+        rates = fetch_all_pg("SELECT rate_id FROM billing_rates ORDER BY rate_id")
+        print("RATES TO SYNC:", len(rates))
+        for row in rates:
+            try:
+                sync_rate_to_secondary(row["rate_id"])
+            except Exception as e:
+                print("BACKFILL RATE ERROR:", row["rate_id"], e)
+
+        usage_rows = fetch_all_pg("SELECT usage_id FROM water_usage ORDER BY usage_id")
+        print("USAGE ROWS TO SYNC:", len(usage_rows))
+        for row in usage_rows:
+            try:
+                sync_usage_to_secondary(row["usage_id"])
+            except Exception as e:
+                print("BACKFILL USAGE ERROR:", row["usage_id"], e)
+
+        bills = fetch_all_pg("SELECT bill_id FROM bills ORDER BY bill_id")
+        print("BILLS TO SYNC:", len(bills))
+        for row in bills:
+            try:
+                sync_bill_to_secondary(row["bill_id"])
+            except Exception as e:
+                print("BACKFILL BILL ERROR:", row["bill_id"], e)
+
+        payments = fetch_all_pg("SELECT payment_id FROM payments ORDER BY payment_id")
+        print("PAYMENTS TO SYNC:", len(payments))
+        for row in payments:
+            try:
+                sync_payment_to_secondary(row["payment_id"])
+            except Exception as e:
+                print("BACKFILL PAYMENT ERROR:", row["payment_id"], e)
+
+        print("BACKFILL COMPLETED")
+        flash("MySQL backfill completed successfully.", "success")
+        return redirect(url_for("admin_dashboard"))
+
+    except Exception as e:
+        print("BACKFILL FATAL ERROR:", e)
+        flash(f"MySQL backfill failed: {e}", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+@app.route("/admin/users/<int:user_id>/toggle", methods=["POST"])
+@login_required("admin")
+def admin_toggle_user(user_id):
+    user = fetch_one_pg("SELECT * FROM users WHERE user_id = %s", (user_id,))
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for("admin_users"))
+    new_status = not bool(user["is_active"])
+    execute_pg("UPDATE users SET is_active = %s WHERE user_id = %s", (new_status, user_id))
+    sync_user_to_secondary(user_id)
+    flash("User status updated successfully.", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/customers", methods=["GET", "POST"])
+@login_required("admin")
+def admin_customers():
+    context = admin_context_data()
+    if request.method == "POST":
+        first_name = request.form.get("first_name", "").strip()
+        last_name = request.form.get("last_name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        phone = request.form.get("phone", "").strip()
+        account_number = request.form.get("account_number", "").strip()
+        meter_number = request.form.get("meter_number", "").strip()
+        district = request.form.get("district", "").strip()
+        address = request.form.get("address", "").strip()
+        customer_type = request.form.get("customer_type", "Domestic").strip()
+        branch_id = request.form.get("branch_id") or None
+        user_id = request.form.get("user_id") or None
+
+        if fetch_one_pg("SELECT customer_id FROM customers WHERE email = %s", (email,)):
+            flash("A customer with that email already exists.", "danger")
+        elif fetch_one_pg("SELECT customer_id FROM customers WHERE account_number = %s", (account_number,)):
+            flash("That account number already exists.", "danger")
+        elif fetch_one_pg("SELECT customer_id FROM customers WHERE meter_number = %s", (meter_number,)):
+            flash("That meter number already exists.", "danger")
+        else:
+            row = execute_pg(
+                """
+                INSERT INTO customers (user_id, branch_id, account_number, meter_number, first_name, last_name, email, phone, district, address, customer_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING customer_id
+                """,
+                (user_id, branch_id, account_number, meter_number, first_name, last_name, email, phone, district, address, customer_type),
+                fetch=True,
+            )
+            sync_customer_to_secondary(row["customer_id"])
+            log_action(current_user()["user_id"], "customer_created_by_admin", f"Customer {row['customer_id']} created")
+            flash("Customer added successfully.", "success")
+            return redirect(url_for("admin_customers"))
+
+    customers = fetch_all_pg(
+        """
+        SELECT c.*, b.branch_name, u.full_name AS linked_user_name
+        FROM customers c
+        LEFT JOIN branches b ON b.branch_id = c.branch_id
+        LEFT JOIN users u ON u.user_id = c.user_id
+        ORDER BY c.customer_id DESC
+        """
+    )
+    linkable_users = fetch_all_pg(
+        """
+        SELECT u.user_id, u.full_name, u.email
+        FROM users u
+        LEFT JOIN customers c ON c.user_id = u.user_id
+        WHERE u.role = 'customer' AND c.customer_id IS NULL
+        ORDER BY u.full_name
+        """
+    )
+    return render_template("admin_customers.html", customers=customers, linkable_users=linkable_users, **context)
+
+
+@app.route("/admin/customers/<int:customer_id>/edit", methods=["POST"])
+@login_required("admin")
+def admin_edit_customer(customer_id):
+    customer = fetch_one_pg("SELECT * FROM customers WHERE customer_id = %s", (customer_id,))
+    if not customer:
+        flash("Customer not found.", "danger")
+        return redirect(url_for("admin_customers"))
+
+    email = request.form.get("email", "").strip().lower()
+    account_number = request.form.get("account_number", "").strip()
+    meter_number = request.form.get("meter_number", "").strip()
+
+    if fetch_one_pg("SELECT customer_id FROM customers WHERE email = %s AND customer_id <> %s", (email, customer_id)):
+        flash("Another customer already uses that email.", "danger")
+        return redirect(url_for("admin_customers"))
+    if fetch_one_pg("SELECT customer_id FROM customers WHERE account_number = %s AND customer_id <> %s", (account_number, customer_id)):
+        flash("Another customer already uses that account number.", "danger")
+        return redirect(url_for("admin_customers"))
+    if fetch_one_pg("SELECT customer_id FROM customers WHERE meter_number = %s AND customer_id <> %s", (meter_number, customer_id)):
+        flash("Another customer already uses that meter number.", "danger")
+        return redirect(url_for("admin_customers"))
+
+    execute_pg(
+        """
+        UPDATE customers
+        SET branch_id=%s, account_number=%s, meter_number=%s, first_name=%s, last_name=%s, email=%s,
+            phone=%s, district=%s, address=%s, customer_type=%s
+        WHERE customer_id=%s
+        """,
+        (
+            request.form.get("branch_id") or None,
+            account_number,
+            meter_number,
+            request.form.get("first_name", "").strip(),
+            request.form.get("last_name", "").strip(),
+            email,
+            request.form.get("phone", "").strip(),
+            request.form.get("district", "").strip(),
+            request.form.get("address", "").strip(),
+            request.form.get("customer_type", "Domestic").strip(),
+            customer_id,
+        ),
+    )
+    sync_customer_to_secondary(customer_id)
+    flash("Customer updated successfully.", "success")
+    return redirect(url_for("admin_customers"))
+
+
+@app.route("/admin/bills")
+@login_required("admin")
+def admin_bills():
+    metrics = fetch_one_pg(
+        """
+        SELECT COUNT(*) AS total_bills, COALESCE(SUM(amount_due),0) AS total_amount,
+               COALESCE(SUM(outstanding_amount),0) AS outstanding_amount
+        FROM bills
+        """
+    )
+    bills = fetch_all_pg(
+        """
+        SELECT b.bill_id, b.bill_month, b.units_used, b.amount_due, b.outstanding_amount, b.status, b.due_date,
+               c.account_number, c.first_name, c.last_name
+        FROM bills b
+        JOIN customers c ON c.customer_id = b.customer_id
+        ORDER BY b.bill_id DESC
+        """
+    )
+    payable_bills = fetch_all_pg(
+        """
+        SELECT b.bill_id, c.account_number, c.first_name, c.last_name, b.outstanding_amount
+        FROM bills b
+        JOIN customers c ON c.customer_id = b.customer_id
+        WHERE b.outstanding_amount > 0
+        ORDER BY b.bill_id DESC
+        """
+    )
+    return render_template("admin_bills.html", metrics=metrics, bills=bills, payable_bills=payable_bills)
+
+
+@app.route("/admin/operations")
+@login_required("admin")
+def admin_operations():
+    metrics, recent_bills, recent_payments, leaks, requests_data, customers, users, usage = get_admin_dashboard_data()
+    return render_template(
+        "admin_operations.html",
+        metrics=metrics,
+        recent_bills=recent_bills,
+        recent_payments=recent_payments,
+        leaks=leaks,
+        requests=requests_data,
+        customers=customers,
+        users=users,
+        usage=usage,
+        branches=get_branches(),
+    )
+
+
+@app.route("/admin")
+@login_required("admin")
+def admin_dashboard():
+    metrics, recent_bills, recent_payments, leaks, requests_data, customers, users, usage = get_admin_dashboard_data()
+    return render_template(
+        "admin_dashboard.html",
+        branches=get_branches(),
+        metrics=metrics,
+        recent_bills=recent_bills,
+        recent_payments=recent_payments,
+        leaks=leaks,
+        requests=requests_data,
+        customers=customers,
+        users=users,
+        usage=usage,
+    )
+
+
+@app.route("/admin/usage", methods=["POST"])
+@login_required("admin")
+def admin_add_usage():
+    customer_id = int(request.form.get("customer_id"))
+    usage_month = request.form.get("usage_month")
+    previous_reading = safe_decimal(request.form.get("previous_reading", "0"))
+    current_reading = safe_decimal(request.form.get("current_reading", "0"))
+
+    if current_reading < previous_reading:
+        flash("Current reading cannot be lower than previous reading.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+    units_used = current_reading - previous_reading
+    usage_row = execute_pg(
+        """
+        INSERT INTO water_usage (customer_id, usage_month, previous_reading, current_reading, units_used)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING usage_id
+        """,
+        (customer_id, usage_month, previous_reading, current_reading, units_used),
+        fetch=True,
+    )
+    sync_usage_to_secondary(usage_row["usage_id"])
+    log_action(current_user()["user_id"], "usage_added", f"Usage {usage_row['usage_id']} added for customer {customer_id}")
+    flash("Water usage record added successfully.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/bill/generate", methods=["POST"])
+@login_required("admin")
+def admin_generate_bill():
+    usage_id = int(request.form.get("usage_id"))
+    usage = fetch_one_pg(
+        """
+        SELECT w.*, c.customer_id
+        FROM water_usage w
+        JOIN customers c ON c.customer_id = w.customer_id
+        WHERE w.usage_id = %s
+        """,
+        (usage_id,),
+    )
+    if not usage:
+        flash("Usage record not found.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+    existing = fetch_one_pg("SELECT bill_id FROM bills WHERE usage_id = %s", (usage_id,))
+    if existing:
+        flash("A bill already exists for that usage record.", "warning")
+        return redirect(url_for("admin_dashboard"))
+
+    rate = fetch_one_pg(
+        """
+        SELECT *
+        FROM billing_rates
+        WHERE active_status = 'Active'
+          AND %s BETWEEN min_units AND max_units
+        ORDER BY min_units ASC
+        LIMIT 1
+        """,
+        (usage["units_used"],),
+    )
+    if not rate:
+        flash("No active billing rate matches this usage amount.", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+    amount_due = (safe_decimal(usage["units_used"]) * safe_decimal(rate["price_per_unit"])) + safe_decimal(rate["fixed_charge"])
+    due_date = date.today() + timedelta(days=21)
+
+    bill_row = execute_pg(
+        """
+        INSERT INTO bills (customer_id, usage_id, rate_id, bill_month, units_used, amount_due, outstanding_amount, status, due_date)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING bill_id
+        """,
+        (
+            usage["customer_id"],
+            usage_id,
+            rate["rate_id"],
+            usage["usage_month"],
+            usage["units_used"],
+            amount_due,
+            amount_due,
+            "Unpaid",
+            due_date,
+        ),
+        fetch=True,
+    )
+    sync_rate_to_secondary(rate["rate_id"])
+    sync_bill_to_secondary(bill_row["bill_id"])
+    log_action(current_user()["user_id"], "bill_generated", f"Bill {bill_row['bill_id']} generated from usage {usage_id}")
+    flash("Bill generated successfully.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/rates", methods=["POST"])
+@login_required("admin")
+def admin_add_rate():
+    row = execute_pg(
+        """
+        INSERT INTO billing_rates (rate_tier, min_units, max_units, price_per_unit, fixed_charge, effective_from, active_status)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING rate_id
+        """,
+        (
+            request.form.get("rate_tier", "").strip(),
+            safe_decimal(request.form.get("min_units", "0")),
+            safe_decimal(request.form.get("max_units", "0")),
+            safe_decimal(request.form.get("price_per_unit", "0")),
+            safe_decimal(request.form.get("fixed_charge", "0")),
+            request.form.get("effective_from"),
+            request.form.get("active_status", "Active").strip(),
+        ),
+        fetch=True,
+    )
+    sync_rate_to_secondary(row["rate_id"])
+    log_action(current_user()["user_id"], "billing_rate_added", f"Rate {row['rate_id']} created")
+    flash("Billing rate saved successfully.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/notification", methods=["POST"])
+@login_required("admin")
+def admin_notification():
+    execute_pg(
+        """
+        INSERT INTO notifications (customer_id, bill_id, channel, subject, message, sent_status)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        (
+            None,
+            None,
+            request.form.get("channel", "Portal").strip(),
+            request.form.get("subject", "").strip(),
+            request.form.get("message", "").strip(),
+            "Pending",
+        ),
+    )
+    log_action(current_user()["user_id"], "notification_created", "Notification saved")
+    flash("Notification saved successfully.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/leak/<int:report_id>", methods=["POST"])
+@login_required("admin")
+def admin_update_leak(report_id):
+    status = request.form.get("status", "Pending").strip()
+    resolved_at = datetime.now() if status == "Resolved" else None
+    execute_pg("UPDATE leak_reports SET status = %s, resolved_at = %s WHERE report_id = %s", (status, resolved_at, report_id))
+    flash("Leak report updated.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/request/<int:request_id>", methods=["POST"])
+@login_required("admin")
+def admin_update_request(request_id):
+    status = request.form.get("status", "Open").strip()
+    execute_pg(
+        "UPDATE service_requests SET status = %s, updated_at = CURRENT_TIMESTAMP WHERE request_id = %s",
+        (status, request_id),
+    )
+    flash("Service request updated.", "success")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/test-mysql")
+def test_mysql():
+    try:
+        conn = get_mysql_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT DATABASE() AS database_name, NOW() AS server_time")
+            row = cur.fetchone()
+        conn.close()
+        return jsonify({"ok": True, "result": row})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/test-mysql-insert")
+def test_mysql_insert():
+    try:
+        execute_mysql(
+            """
+            INSERT INTO users (full_name, email, password_hash, role, branch_id, is_active)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                "Debug User",
+                f"debug_{int(datetime.now().timestamp())}@test.com",
+                "debug_hash",
+                "customer",
+                None,
+                True,
+            ),
+        )
+        return jsonify({"ok": True, "message": "Insert worked"})
+    except Exception as e:
+        print("TEST MYSQL INSERT ERROR:", e)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/backfill-mysql", methods=["GET", "POST"])
+@login_required("admin")
+def admin_backfill_mysql():
+    try:
+        print("BACKFILL STARTED")
+
+        if not mysql_available():
+            print("BACKFILL FAILED: MySQL not available")
+            flash("MySQL is not available.", "danger")
+            return redirect(url_for("admin_dashboard"))
+
+        branches = fetch_all_pg("SELECT branch_id FROM branches ORDER BY branch_id")
+        print("BRANCHES TO SYNC:", len(branches))
+        for row in branches:
+            try:
+                sync_branch_to_secondary(row["branch_id"])
+            except Exception as e:
+                print("BACKFILL BRANCH ERROR:", row["branch_id"], e)
+
+        users = fetch_all_pg("SELECT user_id FROM users ORDER BY user_id")
+        print("USERS TO SYNC:", len(users))
+        for row in users:
+            try:
+                sync_user_to_secondary(row["user_id"])
+            except Exception as e:
+                print("BACKFILL USER ERROR:", row["user_id"], e)
+
+        customers = fetch_all_pg("SELECT customer_id FROM customers ORDER BY customer_id")
+        print("CUSTOMERS TO SYNC:", len(customers))
+        for row in customers:
+            try:
+                sync_customer_to_secondary(row["customer_id"])
+            except Exception as e:
+                print("BACKFILL CUSTOMER ERROR:", row["customer_id"], e)
+
+        rates = fetch_all_pg("SELECT rate_id FROM billing_rates ORDER BY rate_id")
+        print("RATES TO SYNC:", len(rates))
+        for row in rates:
+            try:
+                sync_rate_to_secondary(row["rate_id"])
+            except Exception as e:
+                print("BACKFILL RATE ERROR:", row["rate_id"], e)
+
+        usage_rows = fetch_all_pg("SELECT usage_id FROM water_usage ORDER BY usage_id")
+        print("USAGE ROWS TO SYNC:", len(usage_rows))
+        for row in usage_rows:
+            try:
+                sync_usage_to_secondary(row["usage_id"])
+            except Exception as e:
+                print("BACKFILL USAGE ERROR:", row["usage_id"], e)
+
+        bills = fetch_all_pg("SELECT bill_id FROM bills ORDER BY bill_id")
+        print("BILLS TO SYNC:", len(bills))
+        for row in bills:
+            try:
+                sync_bill_to_secondary(row["bill_id"])
+            except Exception as e:
+                print("BACKFILL BILL ERROR:", row["bill_id"], e)
+
+        payments = fetch_all_pg("SELECT payment_id FROM payments ORDER BY payment_id")
+        print("PAYMENTS TO SYNC:", len(payments))
+        for row in payments:
+            try:
+                sync_payment_to_secondary(row["payment_id"])
+            except Exception as e:
+                print("BACKFILL PAYMENT ERROR:", row["payment_id"], e)
+
+        print("BACKFILL COMPLETED")
+        flash("MySQL backfill completed successfully.", "success")
+        return redirect(url_for("admin_dashboard"))
+
+    except Exception as e:
+        print("BACKFILL FATAL ERROR:", e)
+        flash(f"MySQL backfill failed: {e}", "danger")
+        return redirect(url_for("admin_dashboard"))
+
+
+# --------------------------
+# Routes: manager
+# --------------------------
+@app.route("/manager")
+@login_required("manager", "admin")
+def manager_dashboard():
+    user = current_user()
+    branch_id = user.get("branch_id") if user.get("role") == "manager" else request.args.get("branch_id")
+    if branch_id:
+        try:
+            branch_id = int(branch_id)
+        except ValueError:
+            branch_id = None
+    metrics, trends, districts, top_customers, branch = get_manager_dashboard_data(branch_id)
+    return render_template(
+        "manager_dashboard.html",
+        metrics=metrics,
+        trends=trends,
+        districts=districts,
+        top_customers=top_customers,
+        branch=branch,
+    )
+
+
+@app.route("/reports/distributed")
+@login_required("manager", "admin")
+def distributed_report():
+    primary_counts, secondary_counts = get_distributed_counts()
+    return render_template(
+        "distributed_report.html",
+        primary_counts=primary_counts,
+        secondary_counts=secondary_counts,
+    )
+
+
+# --------------------------
+# Error handlers
+# --------------------------
+@app.errorhandler(403)
+def forbidden(_error):
+    return render_template("error.html", code=403, message="You do not have permission to access this page."), 403
+
+
+@app.errorhandler(404)
+def not_found(_error):
+    return render_template("error.html", code=404, message="The page you requested was not found."), 404
+
+
+@app.errorhandler(500)
+def internal_error(_error):
+    return render_template("error.html", code=500, message="An internal server error occurred."), 500
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
