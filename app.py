@@ -1,4 +1,6 @@
+
 import os
+import traceback
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from functools import wraps
@@ -1937,7 +1939,9 @@ def not_found(_error):
 
 
 @app.errorhandler(500)
-def internal_error(_error):
+def internal_error(error):
+    print("UNHANDLED 500 ERROR:", error)
+    traceback.print_exc()
     return render_template("error.html", code=500, message="An internal server error occurred."), 500
 
 
