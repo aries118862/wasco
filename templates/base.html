@@ -9,6 +9,7 @@
   <link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap' rel='stylesheet'>
   <link rel='stylesheet' href='{{ url_for("static", filename="css/style.css") }}'>
   <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+  <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css'>
 </head>
 <body>
   <div class='page-shell'>
@@ -17,8 +18,8 @@
         <a href='{{ url_for("home") }}' class='brand'>
           <img src='{{ url_for("static", filename="wasco.png") }}' alt='WASCO logo' class='brand-logo'>
           <div>
-            <div class='brand-title'>WASCO Online Services</div>
-            <div class='brand-subtitle'>Smart water services for modern customer care</div>
+            <div class='brand-title'>WASCO Online Water Billing Portal</div>
+            <div class='brand-subtitle'>Secure water billing and customer service platform</div>
           </div>
         </a>
 
@@ -62,8 +63,8 @@
           <div class='footer-brand'>
             <img src='{{ url_for("static", filename="wasco.png") }}' alt='WASCO logo' class='footer-logo'>
             <div>
-              <h4>WASCO Online Services</h4>
-              <p>Reliable digital water services, billing access, customer support and operational visibility in one polished platform.</p>
+              <h4>WASCO Online Water Billing Portal</h4>
+              <p>Reliable digital water services, billing access, customer support and operational visibility in one secure platform.</p>
             </div>
           </div>
         </div>
@@ -78,10 +79,10 @@
         </div>
         <div>
           <h4>Service status</h4>
-          <p>{{ payment_provider_name }} is configured for integration-ready development and payment workflow testing.</p>
+          <p>{{ payment_provider_name }} is configured for secure payment workflow processing and future live gateway integration.</p>
         </div>
       </div>
-      <div class='copyright'>© {{ year }} Water and Sewerage Company (WASCO)</div>
+      <div class='copyright'>© {{ year }} WASCO – Water and Sewerage Company Lesotho. All Rights Reserved.</div>
     </footer>
   </div>
 </body>

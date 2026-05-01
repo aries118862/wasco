@@ -650,3 +650,22 @@ textarea{
   .hero,.page-header,.dashboard-header,.auth-section{padding-top:56px}
   .brand-logo,.footer-logo{width:46px;height:46px}
 }
+/* PROFESSIONAL ANALYTICS + ICON ENHANCEMENTS */
+.icon-metric{position:relative;overflow:hidden}
+.icon-circle{
+  width:46px;height:46px;border-radius:16px;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#e0f2fe,#dbeafe);
+  color:#1556b5;font-size:1.12rem;margin-bottom:12px;
+  border:1px solid rgba(37,99,235,.16);
+}
+.icon-circle.warning{background:linear-gradient(135deg,#fff7ed,#ffedd5);color:#c2410c}
+.quick-card .icon-circle{margin-bottom:14px}
+.chart-card{
+  background:#fff;border:1px solid rgba(191,211,230,.65);
+  border-radius:24px;padding:22px;box-shadow:var(--shadow-soft);
+}
+.chart-card h3{display:flex;align-items:center;gap:10px;margin-bottom:18px;color:#0f2f57}
+.chart-card canvas{max-height:340px;width:100% !important}
+.eyebrow i{margin-right:8px}
+.metric-card small{display:block;margin-top:8px;color:var(--muted);font-weight:600}

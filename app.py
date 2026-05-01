@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "wasco-dev-secret-key")
+app.secret_key = os.getenv("FLASK_SECRET_KEY") or os.getenv("SECRET_KEY", "change-this-secret-key")
 
 # PostgreSQL - Supabase primary database
 PG_HOST = os.getenv("PG_HOST", "aws-0-eu-west-1.pooler.supabase.com")
@@ -149,7 +149,6 @@ def execute_mysql(sql, params=None, fetch=False):
 
 def mysql_available():
     try:
-        print("MYSQL CONFIG:", MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_DATABASE)
         conn = get_mysql_connection()
         with conn.cursor() as cur:
             cur.execute("SELECT 1 AS ok")
@@ -995,6 +994,96 @@ def get_manager_dashboard_data(branch_id=None):
     return metrics, trends, districts, top_customers, branch
 
 
+def _chart_number(value):
+    """Convert Decimal/None values into chart-safe floats."""
+    return float(value or 0)
+
+
+def get_analytics_chart_data(branch_id=None):
+    """Central chart data used by admin and manager dashboards."""
+    branch_filter = ""
+    params = []
+    if branch_id:
+        branch_filter = "WHERE c.branch_id = %s"
+        params.append(branch_id)
+
+    monthly_usage = fetch_all_pg(
+        f"""
+        SELECT TO_CHAR(date_trunc('month', w.usage_month), 'Mon YYYY') AS label,
+               COALESCE(SUM(w.units_used), 0) AS value
+        FROM water_usage w
+        JOIN customers c ON c.customer_id = w.customer_id
+        {branch_filter}
+        GROUP BY date_trunc('month', w.usage_month)
+        ORDER BY date_trunc('month', w.usage_month)
+        LIMIT 12
+        """,
+        tuple(params),
+    )
+
+    billing_by_status = fetch_all_pg(
+        f"""
+        SELECT COALESCE(b.status, 'Unpaid') AS label,
+               COALESCE(SUM(b.outstanding_amount), 0) AS value,
+               COUNT(*) AS count
+        FROM bills b
+        JOIN customers c ON c.customer_id = b.customer_id
+        {branch_filter}
+        GROUP BY COALESCE(b.status, 'Unpaid')
+        ORDER BY value DESC
+        """,
+        tuple(params),
+    )
+
+    district_usage = fetch_all_pg(
+        f"""
+        SELECT COALESCE(NULLIF(c.district, ''), 'Unassigned') AS label,
+               COALESCE(SUM(w.units_used), 0) AS value
+        FROM customers c
+        LEFT JOIN water_usage w ON w.customer_id = c.customer_id
+        {branch_filter}
+        GROUP BY COALESCE(NULLIF(c.district, ''), 'Unassigned')
+        ORDER BY value DESC
+        LIMIT 10
+        """,
+        tuple(params),
+    )
+
+    payment_methods = fetch_all_pg(
+        f"""
+        SELECT COALESCE(NULLIF(p.payment_method, ''), 'Unspecified') AS label,
+               COALESCE(SUM(p.amount_paid), 0) AS value
+        FROM payments p
+        JOIN customers c ON c.customer_id = p.customer_id
+        {branch_filter}
+        GROUP BY COALESCE(NULLIF(p.payment_method, ''), 'Unspecified')
+        ORDER BY value DESC
+        LIMIT 8
+        """,
+        tuple(params),
+    )
+
+    return {
+        "monthly_usage": {
+            "labels": [row["label"] for row in monthly_usage],
+            "values": [_chart_number(row["value"]) for row in monthly_usage],
+        },
+        "billing_by_status": {
+            "labels": [row["label"] for row in billing_by_status],
+            "values": [_chart_number(row["value"]) for row in billing_by_status],
+            "counts": [int(row["count"] or 0) for row in billing_by_status],
+        },
+        "district_usage": {
+            "labels": [row["label"] for row in district_usage],
+            "values": [_chart_number(row["value"]) for row in district_usage],
+        },
+        "payment_methods": {
+            "labels": [row["label"] for row in payment_methods],
+            "values": [_chart_number(row["value"]) for row in payment_methods],
+        },
+    }
+
+
 def get_distributed_counts():
     primary = {
         "customers": int(scalar_pg("SELECT COUNT(*) FROM customers") or 0),
@@ -1618,6 +1707,7 @@ def admin_dashboard():
         customers=customers,
         users=users,
         usage=usage,
+        chart_data=get_analytics_chart_data(),
     )
 
 
@@ -1785,42 +1875,6 @@ def admin_update_request(request_id):
     return redirect(url_for("admin_dashboard"))
 
 
-@app.route("/test-mysql")
-def test_mysql():
-    try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cur:
-            cur.execute("SELECT DATABASE() AS database_name, NOW() AS server_time")
-            row = cur.fetchone()
-        conn.close()
-        return jsonify({"ok": True, "result": row})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/test-mysql-insert")
-def test_mysql_insert():
-    try:
-        execute_mysql(
-            """
-            INSERT INTO users (full_name, email, password_hash, role, branch_id, is_active)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (
-                "Debug User",
-                f"debug_{int(datetime.now().timestamp())}@test.com",
-                "debug_hash",
-                "customer",
-                None,
-                True,
-            ),
-        )
-        return jsonify({"ok": True, "message": "Insert worked"})
-    except Exception as e:
-        print("TEST MYSQL INSERT ERROR:", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
 @app.route("/admin/backfill-mysql", methods=["GET", "POST"])
 @login_required("admin")
 def admin_backfill_mysql():
@@ -1911,6 +1965,7 @@ def manager_dashboard():
         districts=districts,
         top_customers=top_customers,
         branch=branch,
+        chart_data=get_analytics_chart_data(branch_id),
     )
 
 
@@ -1947,4 +2002,4 @@ def internal_error(error):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.getenv("FLASK_DEBUG", "0") == "1")

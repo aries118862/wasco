@@ -1,16 +1,67 @@
 {% extends 'base.html' %}
-{% block title %}Operations Dashboard{% endblock %}
+{% block title %}Administrative Control Panel{% endblock %}
 {% block content %}
-<section class='dashboard-header'><div class='container'><div class='eyebrow'>Operations overview</div><h1>Central service and billing dashboard</h1><p class='muted'>A cleaner workspace for customer records, billing flows, service operations and reporting.</p></div></section>
+<section class='dashboard-header'>
+  <div class='container'>
+    <div class='eyebrow'><i class='fa-solid fa-shield-halved'></i> Administrative control panel</div>
+    <h1>Central service, billing and customer operations dashboard</h1>
+    <p class='muted'>Manage customer records, water usage, billing, payments, service requests and distributed database monitoring from one secure workspace.</p>
+  </div>
+</section>
+
 {% include 'admin_nav.html' %}
-<section class='section'><div class='container grid-4'><div class='metric-card'><span>Total customers</span><strong>{{ metrics.total_customers }}</strong><small>registered customer records</small></div><div class='metric-card'><span>Total bills</span><strong>{{ metrics.total_bills }}</strong><small>generated billing records</small></div><div class='metric-card'><span>Total collections</span><strong>LSL {{ '%.2f'|format(metrics.total_collections) }}</strong><small>captured payments</small></div><div class='metric-card'><span>Outstanding</span><strong>LSL {{ '%.2f'|format(metrics.outstanding_balance) }}</strong><small>remaining balance</small></div></div></section>
-<section class='section alt'><div class='container card-grid'>
-  <div class='quick-card'><h3>Account Access</h3><p class='muted'>Manage platform users and secure sign-in records.</p><a class='btn btn-primary' href='{{ url_for("admin_users") }}'>Open</a></div>
-  <div class='quick-card'><h3>Customer Records</h3><p class='muted'>Maintain account numbers, meter details and branch assignments.</p><a class='btn btn-primary' href='{{ url_for("admin_customers") }}'>Open</a></div>
-  <div class='quick-card'><h3>Operations</h3><p class='muted'>Capture usage, rates, notifications and service issues.</p><a class='btn btn-primary' href='{{ url_for("admin_operations") }}'>Open</a></div>
-  <div class='quick-card'><h3>Billing</h3><p class='muted'>Review bills, track balances and record payments.</p><a class='btn btn-primary' href='{{ url_for("admin_bills") }}'>Open</a></div>
-  <div class='quick-card'><h3>Analytics</h3><p class='muted'>View service performance and operational summaries.</p><a class='btn btn-outline' href='{{ url_for("manager_dashboard") }}'>Open</a></div>
-  <div class='quick-card'><h3>Database Report</h3><p class='muted'>Review cross-database counts and synchronized records.</p><a class='btn btn-outline' href='{{ url_for("distributed_report") }}'>Open</a></div>
-</div></section>
-<section class='section'><div class='container two-col'><div class='table-card'><h3>Recent bills</h3><table><thead><tr><th>Bill ID</th><th>Account</th><th>Month</th><th>Amount Due</th><th>Status</th></tr></thead><tbody>{% for bill in recent_bills %}<tr><td>{{ bill.bill_id }}</td><td>{{ bill.account_number }}</td><td>{{ bill.bill_month }}</td><td>LSL {{ '%.2f'|format(bill.amount_due or 0) }}</td><td><span class='badge'>{{ bill.status }}</span></td></tr>{% else %}<tr><td colspan='5'>No bill records yet.</td></tr>{% endfor %}</tbody></table></div><div class='table-card'><h3>Recent payments</h3><table><thead><tr><th>Payment ID</th><th>Account</th><th>Customer</th><th>Amount</th><th>Method</th></tr></thead><tbody>{% for payment in recent_payments %}<tr><td>{{ payment.payment_id }}</td><td>{{ payment.account_number }}</td><td>{{ payment.first_name }} {{ payment.last_name }}</td><td>LSL {{ '%.2f'|format(payment.amount_paid or 0) }}</td><td>{{ payment.payment_method }}</td></tr>{% else %}<tr><td colspan='5'>No payments yet.</td></tr>{% endfor %}</tbody></table></div></div></section>
+
+<section class='section'>
+  <div class='container grid-4'>
+    <div class='metric-card icon-metric'><div class='icon-circle'><i class='fa-solid fa-users'></i></div><span>Total Customers</span><strong>{{ metrics.total_customers }}</strong><small>registered customer accounts</small></div>
+    <div class='metric-card icon-metric'><div class='icon-circle'><i class='fa-solid fa-file-invoice-water'></i></div><span>Total Bills</span><strong>{{ metrics.total_bills }}</strong><small>generated billing records</small></div>
+    <div class='metric-card icon-metric'><div class='icon-circle'><i class='fa-solid fa-hand-holding-dollar'></i></div><span>Total Collections</span><strong>LSL {{ '%.2f'|format(metrics.total_collections or 0) }}</strong><small>captured payment value</small></div>
+    <div class='metric-card icon-metric'><div class='icon-circle warning'><i class='fa-solid fa-triangle-exclamation'></i></div><span>Outstanding Balance</span><strong>LSL {{ '%.2f'|format(metrics.outstanding_balance or 0) }}</strong><small>pending customer balances</small></div>
+  </div>
+</section>
+
+<section class='section alt'>
+  <div class='container card-grid'>
+    <div class='quick-card'><div class='icon-circle'><i class='fa-solid fa-user-lock'></i></div><h3>User Account Management</h3><p class='muted'>Create and control secure access for administrators, branch managers and customers.</p><a class='btn btn-primary' href='{{ url_for("admin_users") }}'>Manage Users</a></div>
+    <div class='quick-card'><div class='icon-circle'><i class='fa-solid fa-address-card'></i></div><h3>Customer Account Management</h3><p class='muted'>Maintain account numbers, meter details, customer contacts and branch assignments.</p><a class='btn btn-primary' href='{{ url_for("admin_customers") }}'>Manage Customers</a></div>
+    <div class='quick-card'><div class='icon-circle'><i class='fa-solid fa-gears'></i></div><h3>Billing Operations</h3><p class='muted'>Record consumption, configure tariffs, generate bills and update service cases.</p><a class='btn btn-primary' href='{{ url_for("admin_operations") }}'>Open Operations</a></div>
+    <div class='quick-card'><div class='icon-circle'><i class='fa-solid fa-credit-card'></i></div><h3>Payment Monitoring</h3><p class='muted'>Review billing status, outstanding balances and captured customer payments.</p><a class='btn btn-primary' href='{{ url_for("admin_bills") }}'>Open Billing</a></div>
+    <div class='quick-card'><div class='icon-circle'><i class='fa-solid fa-chart-line'></i></div><h3>Performance Analytics</h3><p class='muted'>View usage, revenue and district-level operational insights.</p><a class='btn btn-outline' href='{{ url_for("manager_dashboard") }}'>View Analytics</a></div>
+    <div class='quick-card'><div class='icon-circle'><i class='fa-solid fa-database'></i></div><h3>Distributed Database Report</h3><p class='muted'>Verify PostgreSQL and MySQL synchronized records for operational verification.</p><a class='btn btn-outline' href='{{ url_for("distributed_report") }}'>Open Report</a></div>
+  </div>
+</section>
+
+<section class='section'>
+  <div class='container two-col'>
+    <div class='chart-card'><h3><i class='fa-solid fa-chart-column'></i> Monthly Water Usage Trend</h3><canvas id='adminUsageChart' height='150'></canvas></div>
+    <div class='chart-card'><h3><i class='fa-solid fa-chart-pie'></i> Outstanding Balance by Status</h3><canvas id='adminStatusChart' height='150'></canvas></div>
+  </div>
+</section>
+
+<section class='section alt'>
+  <div class='container two-col'>
+    <div class='chart-card'><h3><i class='fa-solid fa-location-dot'></i> District Consumption Distribution</h3><canvas id='adminDistrictChart' height='150'></canvas></div>
+    <div class='chart-card'><h3><i class='fa-solid fa-wallet'></i> Collections by Payment Method</h3><canvas id='adminPaymentChart' height='150'></canvas></div>
+  </div>
+</section>
+
+<section class='section'>
+  <div class='container two-col'>
+    <div class='table-card'><h3>Recent Bills</h3><table><thead><tr><th>Bill ID</th><th>Account</th><th>Month</th><th>Amount Due</th><th>Status</th></tr></thead><tbody>{% for bill in recent_bills %}<tr><td>{{ bill.bill_id }}</td><td>{{ bill.account_number }}</td><td>{{ bill.bill_month }}</td><td>LSL {{ '%.2f'|format(bill.amount_due or 0) }}</td><td><span class='badge'>{{ bill.status }}</span></td></tr>{% else %}<tr><td colspan='5'>No billing records available.</td></tr>{% endfor %}</tbody></table></div>
+    <div class='table-card'><h3>Recent Payments</h3><table><thead><tr><th>Payment ID</th><th>Account</th><th>Customer</th><th>Amount</th><th>Method</th></tr></thead><tbody>{% for payment in recent_payments %}<tr><td>{{ payment.payment_id }}</td><td>{{ payment.account_number }}</td><td>{{ payment.first_name }} {{ payment.last_name }}</td><td>LSL {{ '%.2f'|format(payment.amount_paid or 0) }}</td><td>{{ payment.payment_method }}</td></tr>{% else %}<tr><td colspan='5'>No payments have been recorded.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</section>
+
+<script>
+const adminCharts = {{ chart_data|tojson }};
+function makeChart(id, type, labels, values, label){
+  const el = document.getElementById(id);
+  if(!el) return;
+  new Chart(el, { type, data: { labels: labels.length ? labels : ['No data'], datasets: [{ label, data: values.length ? values : [0], borderWidth: 2, tension: .35 }] }, options: { responsive:true, plugins:{ legend:{ display: type !== 'bar' && type !== 'line' } }, scales: type === 'pie' || type === 'doughnut' ? {} : { y:{ beginAtZero:true } } } });
+}
+makeChart('adminUsageChart','line',adminCharts.monthly_usage.labels,adminCharts.monthly_usage.values,'Usage Units');
+makeChart('adminStatusChart','doughnut',adminCharts.billing_by_status.labels,adminCharts.billing_by_status.values,'Outstanding Balance');
+makeChart('adminDistrictChart','bar',adminCharts.district_usage.labels,adminCharts.district_usage.values,'Units Used');
+makeChart('adminPaymentChart','pie',adminCharts.payment_methods.labels,adminCharts.payment_methods.values,'Collections');
+</script>
 {% endblock %}

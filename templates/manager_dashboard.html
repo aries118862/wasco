@@ -1,1 +1,74 @@
-{% extends 'base.html' %}{% block title %}Analytics Dashboard{% endblock %}{% block content %}<section class='dashboard-header'><div class='container'><div class='eyebrow'>Performance insights</div><h1>{{ branch.branch_name if branch else 'Operational analytics dashboard' }}</h1><p>Track daily, weekly, monthly, quarterly and yearly performance for water usage, billing and collections.</p></div></section><section class='section'><div class='container grid-4'><div class='metric-card'><span>Customers</span><strong>{{ metrics.total_customers }}</strong></div><div class='metric-card'><span>Monthly units</span><strong>{{ metrics.monthly_units or 0 }}</strong></div><div class='metric-card'><span>Billed</span><strong>LSL {{ '%.2f'|format(metrics.billed_amount or 0) }}</strong></div><div class='metric-card'><span>Outstanding</span><strong>LSL {{ '%.2f'|format(metrics.outstanding_amount or 0) }}</strong></div></div></section><section class='section alt'><div class='container two-col'><div class='card'><h3>Reporting ranges</h3><div class='mini-list'><div class='mini-row'><strong>Daily usage</strong><span>{{ '%.2f'|format(trends.daily or 0) }} units</span></div><div class='mini-row'><strong>Weekly usage</strong><span>{{ '%.2f'|format(trends.weekly or 0) }} units</span></div><div class='mini-row'><strong>Monthly usage</strong><span>{{ '%.2f'|format(trends.monthly or 0) }} units</span></div><div class='mini-row'><strong>Quarterly usage</strong><span>{{ '%.2f'|format(trends.quarterly or 0) }} units</span></div><div class='mini-row'><strong>Yearly usage</strong><span>{{ '%.2f'|format(trends.yearly or 0) }} units</span></div></div></div><div class='card'><h3>Distributed report</h3><p>Review cross-database record counts between the primary PostgreSQL operational database and the MySQL replica or fragment database.</p><a href='{{ url_for("distributed_report") }}' class='btn btn-primary'>Open Distributed Report</a></div></div></section><section class='section'><div class='container two-col'><div class='table-card'><h3>District summary</h3><table><thead><tr><th>District</th><th>Customers</th><th>Units Used</th><th>Billed</th><th>Outstanding</th></tr></thead><tbody>{% for row in districts %}<tr><td>{{ row.district }}</td><td>{{ row.customers }}</td><td>{{ row.units_used }}</td><td>LSL {{ '%.2f'|format(row.billed or 0) }}</td><td>LSL {{ '%.2f'|format(row.outstanding or 0) }}</td></tr>{% else %}<tr><td colspan='5'>No summary data available.</td></tr>{% endfor %}</tbody></table></div><div class='table-card'><h3>High usage customers</h3><table><thead><tr><th>Account</th><th>Name</th><th>Total Units</th><th>Outstanding</th></tr></thead><tbody>{% for row in top_customers %}<tr><td>{{ row.account_number }}</td><td>{{ row.first_name }} {{ row.last_name }}</td><td>{{ row.total_units }}</td><td>LSL {{ '%.2f'|format(row.outstanding or 0) }}</td></tr>{% else %}<tr><td colspan='4'>No customer analytics yet.</td></tr>{% endfor %}</tbody></table></div></div></section><section class='section alt'><div class='container card'><h3>Usage and revenue chart</h3><canvas id='managerChart' height='100'></canvas></div></section><script>new Chart(document.getElementById('managerChart'), {type:'bar', data:{labels:['Daily','Weekly','Monthly','Quarterly','Yearly'], datasets:[{label:'Usage Units', data:[{{ trends.daily or 0 }}, {{ trends.weekly or 0 }}, {{ trends.monthly or 0 }}, {{ trends.quarterly or 0 }}, {{ trends.yearly or 0 }}]}]}})</script>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Branch Manager Analytics Dashboard{% endblock %}
+{% block content %}
+<section class='dashboard-header'>
+  <div class='container'>
+    <div class='eyebrow'><i class='fa-solid fa-chart-simple'></i> Performance insights</div>
+    <h1>{{ branch.branch_name if branch else 'Branch Manager Analytics Dashboard' }}</h1>
+    <p>Monitor water usage trends, billing performance, outstanding balances and operational insights across districts.</p>
+  </div>
+</section>
+
+<section class='section'>
+  <div class='container grid-4'>
+    <div class='metric-card icon-metric'><div class='icon-circle'><i class='fa-solid fa-users'></i></div><span>Customers</span><strong>{{ metrics.total_customers }}</strong><small>active customer records</small></div>
+    <div class='metric-card icon-metric'><div class='icon-circle'><i class='fa-solid fa-droplet'></i></div><span>Monthly Usage</span><strong>{{ metrics.monthly_units or 0 }}</strong><small>units consumed this month</small></div>
+    <div class='metric-card icon-metric'><div class='icon-circle'><i class='fa-solid fa-file-invoice-dollar'></i></div><span>Billed Amount</span><strong>LSL {{ '%.2f'|format(metrics.billed_amount or 0) }}</strong><small>current month billing</small></div>
+    <div class='metric-card icon-metric'><div class='icon-circle warning'><i class='fa-solid fa-scale-balanced'></i></div><span>Outstanding</span><strong>LSL {{ '%.2f'|format(metrics.outstanding_amount or 0) }}</strong><small>unsettled balances</small></div>
+  </div>
+</section>
+
+<section class='section alt'>
+  <div class='container two-col'>
+    <div class='card'>
+      <h3><i class='fa-solid fa-calendar-days'></i> Reporting Ranges</h3>
+      <div class='mini-list'>
+        <div class='mini-row'><strong>Daily Usage Overview</strong><span>{{ '%.2f'|format(trends.daily or 0) }} units</span></div>
+        <div class='mini-row'><strong>Weekly Usage Overview</strong><span>{{ '%.2f'|format(trends.weekly or 0) }} units</span></div>
+        <div class='mini-row'><strong>Monthly Billing Summary</strong><span>{{ '%.2f'|format(trends.monthly or 0) }} units</span></div>
+        <div class='mini-row'><strong>Quarterly Usage Insight</strong><span>{{ '%.2f'|format(trends.quarterly or 0) }} units</span></div>
+        <div class='mini-row'><strong>Annual Performance Insight</strong><span>{{ '%.2f'|format(trends.yearly or 0) }} units</span></div>
+      </div>
+    </div>
+    <div class='card'>
+      <h3><i class='fa-solid fa-database'></i> Heterogeneous Database Report</h3>
+      <p>Review cross-database record counts between the primary PostgreSQL operational database and the MySQL synchronized replica/fragment database.</p>
+      <a href='{{ url_for("distributed_report") }}' class='btn btn-primary'>Open Distributed Report</a>
+    </div>
+  </div>
+</section>
+
+<section class='section'>
+  <div class='container two-col'>
+    <div class='chart-card'><h3><i class='fa-solid fa-chart-line'></i> Monthly Usage Trend</h3><canvas id='managerUsageChart' height='150'></canvas></div>
+    <div class='chart-card'><h3><i class='fa-solid fa-chart-pie'></i> Billing Status Distribution</h3><canvas id='managerBillingChart' height='150'></canvas></div>
+  </div>
+</section>
+
+<section class='section alt'>
+  <div class='container two-col'>
+    <div class='chart-card'><h3><i class='fa-solid fa-map-location-dot'></i> District Usage Comparison</h3><canvas id='managerDistrictChart' height='150'></canvas></div>
+    <div class='chart-card'><h3><i class='fa-solid fa-money-bill-transfer'></i> Payment Method Collections</h3><canvas id='managerPaymentChart' height='150'></canvas></div>
+  </div>
+</section>
+
+<section class='section'>
+  <div class='container two-col'>
+    <div class='table-card'><h3>District Summary</h3><table><thead><tr><th>District</th><th>Customers</th><th>Units Used</th><th>Billed</th><th>Outstanding</th></tr></thead><tbody>{% for row in districts %}<tr><td>{{ row.district or 'Unassigned' }}</td><td>{{ row.customers }}</td><td>{{ row.units_used }}</td><td>LSL {{ '%.2f'|format(row.billed or 0) }}</td><td>LSL {{ '%.2f'|format(row.outstanding or 0) }}</td></tr>{% else %}<tr><td colspan='5'>No district summary data available.</td></tr>{% endfor %}</tbody></table></div>
+    <div class='table-card'><h3>High Usage Customers</h3><table><thead><tr><th>Account</th><th>Name</th><th>Total Units</th><th>Outstanding</th></tr></thead><tbody>{% for row in top_customers %}<tr><td>{{ row.account_number }}</td><td>{{ row.first_name }} {{ row.last_name }}</td><td>{{ row.total_units }}</td><td>LSL {{ '%.2f'|format(row.outstanding or 0) }}</td></tr>{% else %}<tr><td colspan='4'>No customer analytics available.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</section>
+
+<script>
+const managerCharts = {{ chart_data|tojson }};
+function makeManagerChart(id, type, labels, values, label){
+  const el = document.getElementById(id);
+  if(!el) return;
+  new Chart(el, { type, data: { labels: labels.length ? labels : ['No data'], datasets: [{ label, data: values.length ? values : [0], borderWidth: 2, tension: .35 }] }, options: { responsive:true, plugins:{ legend:{ display: type !== 'bar' && type !== 'line' } }, scales: type === 'pie' || type === 'doughnut' ? {} : { y:{ beginAtZero:true } } } });
+}
+makeManagerChart('managerUsageChart','line',managerCharts.monthly_usage.labels,managerCharts.monthly_usage.values,'Usage Units');
+makeManagerChart('managerBillingChart','doughnut',managerCharts.billing_by_status.labels,managerCharts.billing_by_status.values,'Outstanding Balance');
+makeManagerChart('managerDistrictChart','bar',managerCharts.district_usage.labels,managerCharts.district_usage.values,'Units Used');
+makeManagerChart('managerPaymentChart','pie',managerCharts.payment_methods.labels,managerCharts.payment_methods.values,'Collections');
+</script>
+{% endblock %}
